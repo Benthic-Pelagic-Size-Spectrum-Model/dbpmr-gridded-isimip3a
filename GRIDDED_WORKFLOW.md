@@ -112,11 +112,21 @@ burial closure; benthic food from sinking export + dead bodies.
 initial state (detritus = scalar `@biomass`).
 
 **Spatial gravity (annual, single fleet):**
-- attractiveness  a_i = (q_pel·B^U_i + q_ben·B^V_i) · acc_i · ice_i
+- attractiveness  a_i = (q_pel·B^U_i + q_ben·B^V_i) · acc_i · ice_i · mpa_i
 - accessibility   acc_i = exp(-depth_i/H) · exp(-shore_i/S)   (H=800 m, S=150 km)
 - ice gate        ice_i = 1[siconc_i < 15%]   (hard; fisheries avoid ice)
+- MPA mask        mpa_i = 0 inside a reserve, 1 outside   (optional; same per-cell gate as the ice)
 - allocation      e_i = E_tot(year) · a_i / Σ_j a_j   (total effort conserved; mean cell effort = E_tot)
 - inertia (opt)   e_i(t+1) = (1-α)e_i(t) + α·e_i^IFD  (α=1 default = instant)
+
+**MPA / closed areas.** A reserve is just another per-cell gate on `a_i`, identical in mechanism to
+the sea-ice gate: set `mpa_i = 0` in protected cells. Because effort is reallocated as
+`e_i = E_tot · a_i/Σa_j`, zeroing reserve cells **displaces** the region's effort onto the open
+cells (fishing-the-line) rather than removing it — the realistic MPA response. Supply it via
+`mpa_csv=<file>` (env/arg), a CSV with columns `lon,lat[,year]`; a listed cell is protected, and an
+optional `year` column phases the closure in (protected from that year onward). Absent ⇒ all open.
+Per-year `MPA-closed=<n>` is reported in the run log. (For a pure no-displacement closure instead,
+set fishing mortality to 0 in those cells directly via `Setup.fishing(func of x,y)` in the package.)
 
 **Per-cell forcing — VERTICALLY BIOMASS-WEIGHTED, per timestep (SPATIOTEMPORAL; no climatology, no
 depth-weighting).** Predators feed through the water column where the food is, so every plankton and
@@ -164,6 +174,7 @@ detail is added WITHOUT moving the regional mean, and the calibrated q_pel/q_ben
 | Export ratio | **per-cell, per-timestep** | getExportRatio (expc-bot/intpp) |
 | Sea-ice gate | **per-cell, per-month** | real siconc, hard 15% |
 | Biomass state | **per-cell** | warm-restart |
+| MPA / closed-area mask | **per-cell, optional (per-year)** | `mpa_csv` (lon,lat[,year]); gates attractiveness like the ice; effort displaces to open cells |
 | Allocated effort | **per-cell** | gravity share |
 | **Total effort** | **per-LME** | fleet total; per-cell only via gravity — *correct, not an artifact* |
 | **q_pel, q_ben** | **per-LME, from 0-D calibration** | carried DIRECTLY into the gridded run (no gridded refit): validated to transfer — the r 0.66→0.89 gain is spatial-structure and q-invariant, per-cell aggregate level within ~1.4× (`calib_A3/lme<L>.rds`) |

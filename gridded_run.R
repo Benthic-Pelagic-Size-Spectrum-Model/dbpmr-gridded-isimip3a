@@ -29,6 +29,7 @@ ascl<-as.numeric(opt("A_SCALE","0.3333")); mu0s<-as.numeric(opt("MU0_SCALE","0.5
 Sys.setenv(PEL_IMM_FRAC=opt("PEL_IMM_FRAC","0.15"))                                   # connectivity floor (C env)
 Hacc<-as.numeric(opt("H","800")); Sacc<-as.numeric(opt("S","150")); icethr<-as.numeric(opt("icethr","0.15"))
 siccsv<-opt("siconc_csv",sprintf("siconc_lme%d.csv",L))          # per-region sea-ice (skipped if absent)
+mpacsv<-opt("mpa_csv",sprintf("mpa_lme%d.csv",L))                # optional MPA/closed-area mask (skipped if absent): reserve cells get F=0, effort displaces to open cells
 base<-Sys.getenv("DBPM_DATA","DBPM_data")
 
 p<-fromJSON(Sys.glob(file.path(base,"equilibrium_runs",sprintf("init_dbpm_nonspatial_fao_lme-%d_searchvol_*.json",L)))[1])$params
@@ -75,6 +76,13 @@ cat(sprintf("  per-cell forcing: %d cells matched (%d dropped, no data), %d mont
 if(nzchar(siccsv) && file.exists(siccsv)){ sc<-read.csv(siccsv); sc$k<-paste(round(sc$lon),round(sc$lat))
   icemat<-function(y){ z<-sc[sc$year==y,]; f<-z$siconc[match(reg$k,z$k)]/100; f[!is.finite(f)]<-0; as.numeric(f<icethr) }
 } else icemat<-function(y) rep(1,nrow(reg))
+# MPA / closed-area mask (same per-cell gate as sea-ice): a {0,1} factor on gravity attractiveness,
+# so reserve cells attract zero effort (F=0) and the region's effort redistributes onto the open
+# cells (effort displacement / fishing-the-line). CSV columns: lon,lat[,year]. A cell listed is
+# protected; with a `year` column the closure is phased (protected from that year on). Default = all open.
+if(nzchar(mpacsv) && file.exists(mpacsv)){ mp<-read.csv(mpacsv); mp$k<-paste(round(mp$lon),round(mp$lat))
+  mpamat<-function(y){ prot<-if("year"%in%names(mp)) mp$k[mp$year<=y] else mp$k; as.numeric(!(reg$k%in%prot)) }
+} else mpamat<-function(y) rep(1,nrow(reg))
 if(ncell>0 && ncell<nrow(reg)){ idx<-round(seq(1,nrow(reg),length.out=ncell)); reg<-reg[idx,] }
 N<-nrow(reg); cat(sprintf("FAO%d (mask %d): %d cells, spin %dyr + %d yrs (%d-%d), %d cores | A/%.1f mu0*%.2f floor %s\n",
   L-100,maskid,N,spinyr,length(yrs),min(yrs),max(yrs),cores,1/ascl,mu0s,Sys.getenv("PEL_IMM_FRAC")))
@@ -131,8 +139,8 @@ cat(sprintf("spin: %d/%d cells ok, %.0f s\n",sum(!is.na(reg$BU)),N,as.numeric(Sy
 
 # --- TRANSIENT: year loop, annual gravity, warm-restart (fishing from unfished equilibrium) ---
 effhist<-matrix(NA,N,length(yrs),dimnames=list(NULL,yrs)); cathist<-effhist; BUhist<-effhist
-for(iy in seq_along(yrs)){ y<-yrs[iy]; ice<-icemat(y)
-  a<-(qpel*pmax(reg$BU,0)+qben*pmax(reg$BV,0))*reg$acc*ice; a[!is.finite(a)]<-0
+for(iy in seq_along(yrs)){ y<-yrs[iy]; ice<-icemat(y); mpa<-mpamat(y)
+  a<-(qpel*pmax(reg$BU,0)+qben*pmax(reg$BV,0))*reg$acc*ice*mpa; a[!is.finite(a)]<-0
   phi<-if(sum(a)>0) a/sum(a) else rep(0,N)
   mult<-N*phi*Etot[as.character(y)]
   cc<-ycols(iy)                                                    # this year's month columns in the per-cell matrices
@@ -142,7 +150,7 @@ for(iy in seq_along(yrs)){ y<-yrs[iy]; ice<-icemat(y)
   for(i in seq_len(N)) if(is.list(res[[i]])){ state[[i]]<-res[[i]]$state
     reg$BU[i]<-res[[i]]$BU; reg$BV[i]<-res[[i]]$BV
     effhist[i,iy]<-phi[i]; cathist[i,iy]<-res[[i]]$catch; BUhist[i,iy]<-res[[i]]$BU }
-  if(iy%%20==0||iy==length(yrs)) cat(sprintf("  year %d: sum catch=%.3g  open cells=%d\n",y,sum(cathist[,iy],na.rm=TRUE),sum(ice)))
+  if(iy%%20==0||iy==length(yrs)) cat(sprintf("  year %d: sum catch=%.3g  open cells=%d  MPA-closed=%d\n",y,sum(cathist[,iy],na.rm=TRUE),sum(ice*mpa),sum(mpa==0)))
 }
 saveRDS(list(reg=reg,eff=effhist,cat=cathist,BU=BUhist,yrs=yrs),sprintf("gridded_A3_lme%d.rds",L))
 cat("wrote gridded_A3_lme",L,".rds\n",sep="")
