@@ -81,6 +81,20 @@ right `/data/run/...` directory. What matters is *which* files (listed here) and
 > rsync those. To regenerate from scratch instead: get the base DBPM_dev parquets from the Python pipeline,
 > then `PARQUET_DIR=... UV_CSV=.../fished_size_UV_tv.csv Rscript augment_parquets_uv.R`.
 
+> **Shortcut — one bundle.** The whole local set is only ~410 MB. Make a single tarball on the laptop and
+> upload that one file (dashboard/scp), then extract into `/data/run`:
+> ```sh
+> # ON THE LAPTOP (in ~/dbpm_compare_scratch):
+> J=/Users/juliab6/Library/CloudStorage/OneDrive-UniversityofTasmania/DBPM_mizer/DBPM_dev/equilibrium_runs/init_dbpm_nonspatial_fao_lme-64_searchvol_12.8.json
+> mkdir -p nectar_stage/equilibrium_runs && cp "$J" nectar_stage/equilibrium_runs/
+> tar -czf nectar_upload.tar.gz -s '|^DBPM_dev_uv/dbpm_inputs|dbpm_inputs_uv|' -s '|^nectar_stage/||' \
+>   DBPM_dev_uv/dbpm_inputs calib_A3 isimip_fishing gfw_static.csv effort_split_lme.csv catch_split_lme.csv nectar_stage/equilibrium_runs
+> rm -rf nectar_stage                    # -> nectar_upload.tar.gz (~129 MB)
+> # ON NECTAR:  cd /data/run && tar -xzf nectar_upload.tar.gz
+> ```
+> That lands dbpm_inputs_uv/, calib_A3/, isimip_fishing/, the 3 CSVs, and equilibrium_runs/ (one JSON) in
+> `/data/run`. Then still do the JSON symlink loop below. The per-item `rsync` commands are the alternative.
+
 ```sh
 S=~/dbpm_compare_scratch
 rsync -avP -e "ssh -i dbpm.pem" \
