@@ -82,7 +82,7 @@ runcell<-function(depth,cint,cslp,ctex,ctob,cexp,qp,qb,nyr,state,
   de<-Setup.Detritus(run,filename="detritus")
   din<-file.path("R","Input"); dir.create(din,showWarnings=FALSE,recursive=TRUE)
   nst<-round(nyr/(1/48))+2; ts_t<-seq_len(nst)*(1/48); jm<-((floor(ts_t*12))%%12)+1
-  rows<-sprintf("%.8g,%.8g,%.8g,%.8g",te(ctex[jm]),te(ctob[jm]),max(cexp[jm],0),dcorr)
+  rows<-sprintf("%.8g,%.8g,%.8g,%.8g",te(ctex[jm]),te(ctob[jm]),pmax(cexp[jm],0),dcorr)
   writeLines(c("pel_tempeff,ben_tempeff,sinking_rate,depth",rows),file.path(din,"forcing_ts.txt"))
   if(!is.null(state)){ pe@initial_flag<-TRUE; be@initial_flag<-TRUE; de@initial_flag<-TRUE
     writeLines(paste(state$U,collapse=","),file.path(din,"fish_ts.txt"))
