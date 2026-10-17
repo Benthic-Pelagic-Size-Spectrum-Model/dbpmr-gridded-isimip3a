@@ -43,7 +43,8 @@ mask<-read.csv("fao_lme_mask_1deg.csv"); reg<-mask[mask$ID_merged==maskid,c("Lon
 reg$k<-paste(round(reg$Lon),round(reg$Lat))
 stat<-read.csv("gfw_static.csv"); stat$k<-paste(round(stat$lon),round(stat$lat))
 reg$depth<- -stat$elevation_m[match(reg$k,stat$k)]; reg$depth[!is.finite(reg$depth)|reg$depth<10]<-10
-pcd<-read_parquet(sprintf("percell_bw/percell_c_lme%d.parquet",L)); pcells<-unique(pcd[,c("lon","lat")]); pcells$k<-paste(round(pcells$lon),round(pcells$lat))
+PCDIR<-Sys.getenv("PERCELL_DIR","percell_bw"); OUTTAG<-Sys.getenv("OUT_TAG","cont")   # ctrlclim: PCDIR=percell_bw_ctrlclim OUT_TAG=ctrlclim (reuses obsclim q)
+pcd<-read_parquet(sprintf("%s/percell_c_lme%d.parquet",PCDIR,L)); pcells<-unique(pcd[,c("lon","lat")]); pcells$k<-paste(round(pcells$lon),round(pcells$lat))
 npq<-nrow(pcells); nmo<-nrow(pcd)/npq; stopifnot(nmo==nyr*12)
 Pint<-matrix(pcd$intercept,nmo,npq); Pslp<-matrix(pcd$slope,nmo,npq); Ptex<-matrix(pcd$texp,nmo,npq)
 Ptob<-matrix(pcd$tob,nmo,npq); Pexp<-matrix(pcd$export,nmo,npq)
@@ -88,7 +89,7 @@ out<-list(L=L, lon=reg$Lon, lat=reg$Lat, depth=reg$depth, w=reg$w, yrs=yrs, qg=c
   nat    =list(tcb=asm(nat ,"tcb"),                    tcblog10=asm(nat ,"tcblog10"), tcblog10_pel=asm(nat ,"tcblog10_pel"), ge10=asm(nat ,"ge10")),
   effort="prescribed", integration="continuous", flag_pel=flag_pel, flag_ben=flag_ben,
   catch_reliable=!(flag_pel||flag_ben))
-saveRDS(out, sprintf("gridded_cont_lme%d.rds",L))
+saveRDS(out, sprintf("gridded_%s_lme%d.rds",OUTTAG,L))
 
 # --- ACCEPTANCE CHECKS ---
 aw<-function(v) sum(v*reg$w,na.rm=TRUE)/sum(reg$w[is.finite(v)])      # area-weighted over cells
@@ -102,4 +103,4 @@ hg<-aw(rowMeans(out$histsoc$ge10[,sel,drop=FALSE])); ng<-aw(rowMeans(out$nat$ge1
 cat(sprintf("[check b] >=10 kg biomass histsoc vs nat (1991-2010): %+.1f%%  (expect clearly negative)\n",100*(hg-ng)/ng))
 for(b in 4:6){ hb<-aw(rowMeans(out$histsoc$tcblog10[,b,sel,drop=FALSE])); nb<-aw(rowMeans(out$nat$tcblog10[,b,sel,drop=FALSE]))
   cat(sprintf("           bin %-9s histsoc-nat = %+.1f%%\n", out$bin_labels[b], 100*(hb-nb)/nb)) }
-cat(sprintf("\nwrote gridded_cont_lme%d.rds\n",L))
+cat(sprintf("\nwrote gridded_%s_lme%d.rds\n",OUTTAG,L))

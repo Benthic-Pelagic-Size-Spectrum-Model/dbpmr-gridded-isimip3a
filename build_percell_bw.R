@@ -4,8 +4,11 @@
 # every month 1961-2010. NO climatology. Output: percell_bw/percell_bw_lme<L>.parquet
 #   per cell x month: intercept, slope, texp (=<thetao> phyc-weighted).  Rscript build_percell_bw.R <L> [<L>..]
 suppressMessages({library(ncdf4); library(arrow); library(parallel)})
-NCDIR<-"gridded_nc"; THRESH<-200
-fn<-function(v)sprintf("%s/gfdl-mom6-cobalt2_obsclim_%s_60arcmin_global_monthly_1961_2010.nc",NCDIR,v)
+# forcing-variant switch (defaults = obsclim, unchanged): for ctrlclim set CLIM=ctrlclim, point NCDIR at
+# the ctrlclim netcdfs, and PERCELL_DIR at a separate output dir so obsclim parquets aren't clobbered.
+NCDIR<-Sys.getenv("NCDIR","gridded_nc"); CLIM<-Sys.getenv("CLIM","obsclim")
+OUTDIR<-Sys.getenv("PERCELL_DIR","percell_bw"); THRESH<-200
+fn<-function(v)sprintf("%s/gfdl-mom6-cobalt2_%s_%s_60arcmin_global_monthly_1961_2010.nc",NCDIR,CLIM,v)
 # GetPPIntSlope constants (Barnes 2010 / Woodworth-Jefcoats 2013), same as the calib
 mmin<-10^-14.25; mmid<-10^-10.184; mmax<-10^-5.25; midS<-log10((mmin+mmid)/2); midL<-log10((mmid+mmax)/2)
 ppintslope<-function(cb,pb){                 # cb=<phyc>, pb=<phypico> (biomass-weighted, mol/m3)

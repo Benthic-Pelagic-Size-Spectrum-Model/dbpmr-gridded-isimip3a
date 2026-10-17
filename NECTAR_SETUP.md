@@ -166,6 +166,36 @@ own machine — they dominate the wall-clock, and bigger `CORES` (fewer `JOBS`) 
 machine with `CORES=8 JOBS=4` already does the whole set in ~12–16 h; two machines roughly halve that.
 
 --------------------------------------------------------------------------------
+## Part F — The ctrlclim (1955-riverine) counterfactual run
+`ctrlclim` here = **riverine nutrient inputs fixed at 1955** (no land-use-driven nutrient increase) — NOT
+a detrended climate. obsclim (dynamic riverine) − ctrlclim isolates the **land-use nutrient** driver. It
+**reuses the obsclim-calibrated regional q** (no recalibration) and runs histsoc + nat under the ctrlclim
+forcing. All 6 forcing vars exist in ctrlclim on THREDDS.
+
+**Key gotcha (why not "just the same way"):** `build_center` normally re-pins each region's mean forcing
+to the obsclim 0-D series (what makes the calibrated q valid). If you did that to ctrlclim it would
+overwrite its lower 1955 nutrient level with obsclim's and **erase the signal**. So the ctrlclim percell
+forcing is built with **`SELFCENTER=1`** — anchor to its OWN regional mean (+ the same dint/texp offsets,
+so q stays consistent).
+
+```sh
+cd /data/run
+# 1. download the 6 ctrlclim netcdfs (same path as obsclim, swap obsclim->ctrlclim)
+mkdir gridded_nc_ctrlclim && cd gridded_nc_ctrlclim
+B=http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/climate/ocean/ctrlclim/global/monthly/historical/GFDL-MOM6-COBALT2
+for v in phyc phypico thetao tob expc-bot intpp; do curl -O $B/gfdl-mom6-cobalt2_ctrlclim_${v}_60arcmin_global_monthly_1961_2010.nc; done
+cd ..
+# 2. build the ctrlclim per-cell forcing (own-mean anchored)
+ALL=$(ls dbpm_inputs_uv/dbpm_clim-fish-inputs_fao_lme-*.parquet | sed -E 's/.*lme-([0-9]+)_.*/\1/')
+CLIM=ctrlclim NCDIR=gridded_nc_ctrlclim PERCELL_DIR=percell_bw_ctrlclim Rscript build_percell_bw.R $ALL --par=6
+PERCELL_DIR=percell_bw_ctrlclim SELFCENTER=1 Rscript build_center.R $ALL --par=6
+# 3. run histsoc + nat, reusing the obsclim q (needs gridded_calib_cont_lme*.rds present from the obsclim run)
+CORES=8 JOBS=4 sh run_ensemble_ctrlclim.sh        # -> gridded_ctrlclim_lme<L>.rds
+```
+Needs the obsclim run's `gridded_calib_cont_lme*.rds` present (transfer them, ~3 MB, or run obsclim first).
+~2 run-only ensembles → **~6–10 h on Nectar** (`JOBS=4`). Resumable, logs in `ensemble_logs_ctrlclim/`.
+
+--------------------------------------------------------------------------------
 ## Part E — Collect results + tidy up
 From the **laptop**, pull the per-region outputs back:
 ```sh
